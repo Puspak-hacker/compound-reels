@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Compound Reels</title>
+    <title>Infinite Compound Reels - Pro</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; height: 100vh; }
@@ -15,19 +15,24 @@
         .reel-container { scroll-snap-type: y mandatory; height: 100vh; overflow-y: scroll; scrollbar-width: none; }
         .reel-container::-webkit-scrollbar { display: none; }
         
-        .reel-card { scroll-snap-align: start; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: 24px; background-color: #0c0c0c; position: relative; }
+        .reel-card { scroll-snap-align: start; height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: 20px 24px; background-color: #0c0c0c; position: relative; }
         
-        .header { display: flex; justify-content: space-between; font-size: 12px; font-family: monospace; color: #00ffff; padding-top: 10px; }
+        .header { display: flex; justify-content: space-between; font-size: 11px; font-family: monospace; color: #00ffff; padding-top: 5px; }
         
-        .image-box { width: 100%; max-width: 350px; height: 45vh; background: #fff; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: auto; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .image-box { width: 100%; max-width: 320px; height: 35vh; background: #fff; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: auto; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .image-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
         
-        .footer { padding-bottom: 40px; }
-        .formula { font-size: 36px; font-weight: 900; margin-bottom: 8px; letter-spacing: 1px; }
-        .name { font-size: 14px; color: #bbb; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
-        .weight { display: inline-block; background: #1a1a1a; border: 1px solid #333; padding: 6px 14px; border-radius: 20px; font-size: 12px; color: #ffdd00; font-family: monospace; }
+        .footer { padding-bottom: 30px; }
+        .formula { font-size: 32px; font-weight: 900; margin-bottom: 4px; letter-spacing: 1px; color: #fff; }
+        .name { font-size: 13px; color: #aaa; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
         
-        .loading-more { scroll-snap-align: start; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #00ffff; font-family: monospace; }
+        /* Grid for advanced properties */
+        .props-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+        .prop-badge { background: #151515; border: 1px solid #222; padding: 6px 10px; border-radius: 10px; font-size: 11px; font-family: monospace; }
+        .prop-label { color: #888; display: block; font-size: 9px; text-transform: uppercase; }
+        .prop-value { color: #ffdd00; font-weight: bold; }
+
+        .smiles-box { background: #111; border: 1px dashed #333; padding: 6px 10px; border-radius: 8px; font-size: 10px; font-family: monospace; color: #00ffcc; word-break: break-all; max-height: 45px; overflow-y: auto; }
     </style>
 </head>
 <body>
@@ -43,11 +48,9 @@
         const feed = document.getElementById('feed');
         let isLoading = false;
 
-        // Function to generate a batch of random valid compound CIDs
         function getRandomCIDs(count = 5) {
             const cids = [];
             for (let i = 0; i < count; i++) {
-                // Pick random CIDs between 1 and 50,000 (well-documented compounds)
                 const randomCid = Math.floor(Math.random() * 50000) + 1;
                 cids.push(randomCid);
             }
@@ -58,10 +61,12 @@
             if (isLoading) return;
             isLoading = true;
 
-            const cids = getRandomCIDs(6);
+            const cids = getRandomCIDs(5);
 
             try {
-                const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cids.join(',')}/property/IUPACName,MolecularFormula,MolecularWeight/JSON`);
+                // Requesting extended properties from PubChem API
+                const propsQuery = "IUPACName,MolecularFormula,MolecularWeight,CanonicalSMILES,XLogP,ExactMass,TPSA";
+                const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cids.join(',')}/property/${propsQuery}/JSON`);
                 const data = await res.json();
                 const properties = data.PropertyTable?.Properties || [];
 
@@ -69,14 +74,18 @@
                     const cid = prop.CID;
                     const name = prop.IUPACName || 'IUPAC Name Unavailable';
                     const formula = prop.MolecularFormula || 'N/A';
-                    const weight = prop.MolecularWeight || 'N/A';
+                    const weight = prop.MolecularWeight ? prop.MolecularWeight.toFixed(2) : 'N/A';
+                    const smiles = prop.CanonicalSMILES || 'N/A';
+                    const xlogp = prop.XLogP !== undefined ? prop.XLogP.toFixed(2) : 'N/A';
+                    const exactMass = prop.ExactMass ? prop.ExactMass.toFixed(4) : 'N/A';
+                    const tpsa = prop.TPSA !== undefined ? `${prop.TPSA} Å²` : 'N/A';
                     const imageUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/PNG?image_size=large`;
 
                     const card = document.createElement('div');
                     card.className = 'reel-card';
                     card.innerHTML = `
                         <div class="header">
-                            <span>PUBCHEM REELS (INFINITE)</span>
+                            <span>PUBCHEM REELS PRO</span>
                             <span>CID: ${cid}</span>
                         </div>
                         <div class="image-box">
@@ -85,7 +94,29 @@
                         <div class="footer">
                             <div class="formula">${formula}</div>
                             <div class="name">${name}</div>
-                            <div class="weight">Mol. Weight: ${weight} g/mol</div>
+                            
+                            <div class="props-grid">
+                                <div class="prop-badge">
+                                    <span class="prop-label">Mol. Weight</span>
+                                    <span class="prop-value">${weight} g/mol</span>
+                                </div>
+                                <div class="prop-badge">
+                                    <span class="prop-label">Exact Mass</span>
+                                    <span class="prop-value">${exactMass}</span>
+                                </div>
+                                <div class="prop-badge">
+                                    <span class="prop-label">XLogP</span>
+                                    <span class="prop-value">${xlogp}</span>
+                                </div>
+                                <div class="prop-badge">
+                                    <span class="prop-label">TPSA</span>
+                                    <span class="prop-value">${tpsa}</span>
+                                </div>
+                            </div>
+
+                            <div class="smiles-box" title="Canonical SMILES">
+                                <span style="color:#666;">SMILES:</span> ${smiles}
+                            </div>
                         </div>
                     `;
                     feed.appendChild(card);
@@ -100,15 +131,12 @@
             }
         }
 
-        // Infinite Scroll Listener
         feed.addEventListener('scroll', () => {
-            // When user reaches near bottom (within 2 screen heights), fetch next batch
             if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - (window.innerHeight * 2)) {
                 fetchMoreCompounds();
             }
         });
 
-        // Initial Load (loads 2 batches = ~12 compounds to start)
         async function init() {
             await fetchMoreCompounds();
             await fetchMoreCompounds();
