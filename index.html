@@ -44,39 +44,46 @@
     <div id="feed" class="reel-container" style="display: none;"></div>
 
     <script>
-        // A large pool of 100% verified real PubChem CIDs (Drugs, organics, natural products, minerals)
+        // Verified pool of robust PubChem CIDs
         const verifiedCids = [
             224, 2519, 2244, 5793, 702, 1183, 962, 1983, 6322, 311, 
-            941, 609, 1047, 5957, 2397, 4440, 5362119, 5280343, 445639, 
-            3345, 6232, 2419, 54675759, 1978, 6032, 5915, 3034, 4678,
-            2489, 5282102, 312, 727, 23925, 937, 5997, 54623, 272386
+            941, 609, 1047, 5957, 2397, 4440, 3345, 6232, 2419, 1978, 
+            6032, 5915, 3034, 4678, 2489, 312, 727, 937, 5997, 638, 
+            701, 712, 783, 988, 1059, 1116, 1148, 1175, 1202, 1249
         ];
 
         const feed = document.getElementById('feed');
         let isLoading = false;
 
-        // Shuffle and pick unique CIDs so it feels infinite without repeating too soon
-        function getBatchCids(count = 4) {
+        function getBatchCids(count = 3) {
             const shuffled = [...verifiedCids].sort(() => 0.5 - Math.random());
             return shuffled.slice(0, count);
+        }
+
+        async function fetchSingleCompound(cid) {
+            try {
+                const propsQuery = "IUPACName,MolecularFormula,MolecularWeight,CanonicalSMILES,XLogP,ExactMass,TPSA";
+                const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/${propsQuery}/JSON`);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data.PropertyTable?.Properties?.[0] || null;
+            } catch (e) {
+                return null;
+            }
         }
 
         async function fetchMoreCompounds() {
             if (isLoading) return;
             isLoading = true;
 
-            const cids = getBatchCids(4);
+            const batchCids = getBatchCids(3);
+            const promises = batchCids.map(cid => fetchSingleCompound(cid));
+            const results = await Promise.allSettled(promises);
 
-            try {
-                const propsQuery = "IUPACName,MolecularFormula,MolecularWeight,CanonicalSMILES,XLogP,ExactMass,TPSA";
-                const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cids.join(',')}/property/${propsQuery}/JSON`);
-                
-                if (!res.ok) throw new Error("Failed to fetch from PubChem");
-                
-                const data = await res.json();
-                const properties = data.PropertyTable?.Properties || [];
-
-                properties.forEach(prop => {
+            let added = 0;
+            results.forEach(result => {
+                if (result.status === 'fulfilled' && result.value) {
+                    const prop = result.value;
                     const cid = prop.CID;
                     const name = prop.IUPACName || 'IUPAC Name Unavailable';
                     const formula = prop.MolecularFormula || 'N/A';
@@ -126,17 +133,17 @@
                         </div>
                     `;
                     feed.appendChild(card);
-                });
+                    added++;
+                }
+            });
 
-                document.getElementById('loader').style.display = 'none';
-                feed.style.display = 'block';
-            } catch (err) {
-                console.error(err);
-                // Fallback: hide loader even if a batch fails so screen doesn't stay stuck
-                document.getElementById('loader').style.display = 'none';
-                feed.style.display = 'block';
-            } finally {
-                isLoading = false;
+            document.getElementById('loader').style.display = 'none';
+            feed.style.display = 'block';
+            isLoading = false;
+
+            // If all fetched items in this batch failed, automatically fetch another batch
+            if (added === 0) {
+                fetchMoreCompounds();
             }
         }
 
