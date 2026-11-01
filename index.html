@@ -116,10 +116,11 @@
             return formula.replace(/(\d+)/g, '<sub>$1</sub>');
         }
 
+        // Expanded range up to 100,000,000 compounds for massive variety
         function getRandomCids(count = 5) {
             const cids = [];
             for (let i = 0; i < count; i++) {
-                cids.push(Math.floor(Math.random() * 9500) + 1);
+                cids.push(Math.floor(Math.random() * 100000000) + 1);
             }
             return cids;
         }
@@ -161,27 +162,36 @@
             if (isLoading || isSearchMode) return;
             isLoading = true;
 
-            const cids = getRandomCids(5);
+            let success = false;
+            let attempts = 0;
 
-            try {
-                const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cids.join(',')}/property/IUPACName,MolecularFormula,MolecularWeight/JSON`);
-                if (!res.ok) throw new Error('Failed to fetch batch');
+            // Auto-retry loop to ensure it never gets stuck on sparse CIDs
+            while (!success && attempts < 5) {
+                attempts++;
+                const cids = getRandomCids(5);
 
-                const data = await res.json();
-                const properties = data.PropertyTable?.Properties || [];
+                try {
+                    const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cids.join(',')}/property/IUPACName,MolecularFormula,MolecularWeight/JSON`);
+                    if (!res.ok) continue;
 
-                properties.forEach(prop => {
-                    const card = createReelCard(prop);
-                    feed.appendChild(card);
-                });
+                    const data = await res.json();
+                    const properties = data.PropertyTable?.Properties || [];
+                    if (properties.length === 0) continue;
 
-                document.getElementById('loader').style.display = 'none';
-                feed.style.display = 'block';
-            } catch (err) {
-                console.warn('Retrying batch fetch...', err);
-            } finally {
-                isLoading = false;
+                    properties.forEach(prop => {
+                        const card = createReelCard(prop);
+                        feed.appendChild(card);
+                    });
+
+                    document.getElementById('loader').style.display = 'none';
+                    feed.style.display = 'block';
+                    success = true;
+                } catch (err) {
+                    // Silently try next batch if network or parse hiccups occur
+                }
             }
+
+            isLoading = false;
         }
 
         async function handleSearch() {
